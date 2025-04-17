@@ -116,9 +116,6 @@ The application requires a running backend server. Update the API base URL in:
 4. Push to the branch
 5. Create a new Pull Request
 
-## License
-
-[Your License] - See LICENSE.md for details
 
 ## Acknowledgments
 
