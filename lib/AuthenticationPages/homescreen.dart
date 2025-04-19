@@ -3,9 +3,9 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:io';
 import 'package:intl/intl.dart';
+import 'package:lio/providers/theme_provider.dart';
 import './AddAppliancePage.dart';
 import 'package:table_calendar/table_calendar.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import 'package:flutter/foundation.dart';
@@ -16,16 +16,14 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  // Get the base URL for API calls
   static String get _baseUrl {
     if (kIsWeb) {
       return 'http://localhost:3000/api';
-    } else if (Platform.isAndroid) {
-      return 'http://192.168.1.13:3000/api';
-    } else if (Platform.isIOS) {
-      return 'http://192.168.1.13:3000/api';
+    } else {
+      return Platform.isAndroid
+          ? 'http://10.0.2.2:3000/api' // Android emulator special address
+          : 'http://localhost:3000/api'; // iOS simulator
     }
-    return 'http://192.168.1.13:3000/api';
   }
 
   List appliances = [];
@@ -56,12 +54,21 @@ class _HomePageState extends State<HomePage> {
     'fan': Icons.air,
     'water_heater': Icons.hot_tub,
     'coffee_maker': Icons.coffee,
+    'unknown': Icons.help_outline,
+    'null': Icons.help_outline,  
   };
 
   @override
   void initState() {
     super.initState();
     fetchAppliances();
+  }
+
+  void printAllApplianceTypes() {
+    final types = appliances
+        .map((a) => a['type']?.toString().toLowerCase() ?? 'null')
+        .toSet();
+    debugPrint('All appliance types in data: $types');
   }
 
   Future<void> fetchAppliances() async {
@@ -150,7 +157,7 @@ class _HomePageState extends State<HomePage> {
           // Add multiple maintenance events until expiry date or for next 5 years
           DateTime nextMaintenance =
               purchaseDate.add(Duration(days: maintenancePeriod * 30));
-          DateTime maxDate = DateTime.now().add(Duration(days: 365 * 5));
+          DateTime maxDate = DateTime.now().add(const Duration(days: 365 * 5));
 
           if (appliance['warrantyExpiryDate'] != null) {
             DateTime expiryDate =
@@ -251,18 +258,18 @@ class _HomePageState extends State<HomePage> {
           updateCalendarEvents();
         });
         ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Appliance deleted successfully')));
+            const SnackBar(content: Text('Appliance deleted successfully')));
       } else if (response.statusCode == 401) {
         await Provider.of<AuthProvider>(context, listen: false).logout();
         Navigator.pushReplacementNamed(context, '/login');
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to delete appliance')));
+            const SnackBar(content: Text('Failed to delete appliance')));
       }
     } catch (e) {
       print('Error deleting appliance: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error occurred while deleting')));
+          const SnackBar(content: Text('Error occurred while deleting')));
     }
   }
 
@@ -271,19 +278,20 @@ class _HomePageState extends State<HomePage> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: Text('Delete Appliance'),
-          content: Text('Are you sure you want to delete this appliance?'),
+          title: const Text('Delete Appliance'),
+          content:
+              const Text('Are you sure you want to delete this appliance?'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: Text('Cancel'),
+              child: const Text('Cancel'),
             ),
             TextButton(
               onPressed: () {
                 Navigator.of(context).pop();
                 deleteAppliance(id);
               },
-              child: Text('Delete', style: TextStyle(color: Colors.red)),
+              child: const Text('Delete', style: TextStyle(color: Colors.red)),
             ),
           ],
         );
@@ -401,13 +409,26 @@ class _HomePageState extends State<HomePage> {
   }
 
   IconData getApplianceIcon(String? type) {
-    if (type == null || !applianceIcons.containsKey(type.toLowerCase())) {
-      return Icons.home_repair_service; // Default icon
+    if (type == null || type.isEmpty) {
+      debugPrint('Appliance type is null, using default icon');
+      return Icons.help_outline;
     }
-    return applianceIcons[type.toLowerCase()]!;
+
+    final normalizedType = type.toLowerCase().trim();
+
+    if (!applianceIcons.containsKey(normalizedType)) {
+      debugPrint('No icon found for type: $normalizedType');
+      return Icons.home_repair_service;
+    }
+
+    debugPrint('Found icon for type: $normalizedType');
+    final lowerType = type.toLowerCase().trim();
+    return applianceIcons[lowerType] ?? Icons.help_outline;
   }
 
   void toggleDarkMode() {
+    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+    themeProvider.toggleTheme(!isDarkMode);
     setState(() {
       isDarkMode = !isDarkMode;
     });
@@ -450,11 +471,11 @@ class _HomePageState extends State<HomePage> {
               color: Colors.deepPurple.withOpacity(0.5),
               shape: BoxShape.circle,
             ),
-            selectedDecoration: BoxDecoration(
+            selectedDecoration: const BoxDecoration(
               color: Colors.deepPurple,
               shape: BoxShape.circle,
             ),
-            markerDecoration: BoxDecoration(
+            markerDecoration: const BoxDecoration(
               color: Colors.deepOrangeAccent,
               shape: BoxShape.circle,
             ),
@@ -475,7 +496,7 @@ class _HomePageState extends State<HomePage> {
       return Center(
         child: Text(
           'No events for ${DateFormat('yyyy-MM-dd').format(_selectedDay)}',
-          style: TextStyle(fontSize: 16, color: Colors.grey),
+          style: const TextStyle(fontSize: 16, color: Colors.grey),
         ),
       );
     }
@@ -517,14 +538,15 @@ class _HomePageState extends State<HomePage> {
         }
 
         return Card(
-          margin: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+          margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
           color: color.withOpacity(0.1),
           child: ListTile(
             leading: CircleAvatar(
               backgroundColor: color.withOpacity(0.2),
               child: Icon(icon, color: color),
             ),
-            title: Text(title, style: TextStyle(fontWeight: FontWeight.bold)),
+            title: Text(title,
+                style: const TextStyle(fontWeight: FontWeight.bold)),
             subtitle: Text(description),
             trailing: Icon(getApplianceIcon(appliance['type'])),
           ),
@@ -535,7 +557,7 @@ class _HomePageState extends State<HomePage> {
 
   Widget buildListView() {
     return filteredAppliances.isEmpty
-        ? Center(child: Text('No appliances found'))
+        ? const Center(child: Text('No appliances found'))
         : ListView.builder(
             itemCount: filteredAppliances.length,
             itemBuilder: (context, index) {
@@ -565,10 +587,12 @@ class _HomePageState extends State<HomePage> {
               double progress = calculateProgress(
                   appliance['purchaseDate'] ??
                       DateTime.now()
-                          .subtract(Duration(days: 1))
+                          .subtract(const Duration(days: 1))
                           .toIso8601String(),
                   appliance['warrantyExpiryDate'] ??
-                      DateTime.now().add(Duration(days: 1)).toIso8601String());
+                      DateTime.now()
+                          .add(const Duration(days: 1))
+                          .toIso8601String());
 
               String warrantyRemaining = getRemainingWarrantyTime(
                   appliance['purchaseDate'] ?? '',
@@ -582,8 +606,8 @@ class _HomePageState extends State<HomePage> {
                 background: Container(
                   color: Colors.red,
                   alignment: Alignment.centerLeft,
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 20.0),
+                  child: const Padding(
+                    padding: EdgeInsets.only(left: 20.0),
                     child: Icon(Icons.delete, color: Colors.white),
                   ),
                 ),
@@ -593,8 +617,8 @@ class _HomePageState extends State<HomePage> {
                     context: context,
                     builder: (BuildContext context) {
                       return AlertDialog(
-                        title: Text('Delete Appliance'),
-                        content: Text(
+                        title: const Text('Delete Appliance'),
+                        content: const Text(
                             'Are you sure you want to delete this appliance?'),
                         actions: [
                           TextButton(
@@ -602,14 +626,14 @@ class _HomePageState extends State<HomePage> {
                               Navigator.of(context).pop();
                               confirm = false;
                             },
-                            child: Text('Cancel'),
+                            child: const Text('Cancel'),
                           ),
                           TextButton(
                             onPressed: () {
                               Navigator.of(context).pop();
                               confirm = true;
                             },
-                            child: Text('Delete',
+                            child: const Text('Delete',
                                 style: TextStyle(color: Colors.red)),
                           ),
                         ],
@@ -623,7 +647,7 @@ class _HomePageState extends State<HomePage> {
                   return confirm;
                 },
                 child: Card(
-                  margin: EdgeInsets.all(10),
+                  margin: const EdgeInsets.all(10),
                   elevation: 3,
                   child: Padding(
                     padding: const EdgeInsets.all(12.0),
@@ -642,22 +666,22 @@ class _HomePageState extends State<HomePage> {
                                 color: Colors.deepPurple,
                               ),
                             ),
-                            SizedBox(width: 15),
+                            const SizedBox(width: 15),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
                                     name,
-                                    style: TextStyle(
+                                    style: const TextStyle(
                                         fontSize: 18,
                                         fontWeight: FontWeight.bold),
                                   ),
-                                  SizedBox(height: 4),
+                                  const SizedBox(height: 4),
                                   Row(
                                     children: [
                                       Container(
-                                        padding: EdgeInsets.symmetric(
+                                        padding: const EdgeInsets.symmetric(
                                             horizontal: 8, vertical: 4),
                                         decoration: BoxDecoration(
                                           color: warrantyColor.withOpacity(0.2),
@@ -676,7 +700,7 @@ class _HomePageState extends State<HomePage> {
                                               size: 14,
                                               color: warrantyColor,
                                             ),
-                                            SizedBox(width: 4),
+                                            const SizedBox(width: 4),
                                             Text(
                                               isExpired
                                                   ? 'Expired'
@@ -690,10 +714,10 @@ class _HomePageState extends State<HomePage> {
                                           ],
                                         ),
                                       ),
-                                      SizedBox(width: 8),
+                                      const SizedBox(width: 8),
                                       if (maintenanceNeeded)
                                         Container(
-                                          padding: EdgeInsets.symmetric(
+                                          padding: const EdgeInsets.symmetric(
                                               horizontal: 8, vertical: 4),
                                           decoration: BoxDecoration(
                                             color:
@@ -703,7 +727,7 @@ class _HomePageState extends State<HomePage> {
                                             border: Border.all(
                                                 color: Colors.orange),
                                           ),
-                                          child: Row(
+                                          child: const Row(
                                             mainAxisSize: MainAxisSize.min,
                                             children: [
                                               Icon(
@@ -729,17 +753,17 @@ class _HomePageState extends State<HomePage> {
                               ),
                             ),
                             IconButton(
-                              icon: Icon(Icons.delete, color: Colors.red),
+                              icon: const Icon(Icons.delete, color: Colors.red),
                               onPressed: () => confirmDelete(id),
                             ),
                           ],
                         ),
-                        SizedBox(height: 15),
+                        const SizedBox(height: 15),
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
                             // Circular progress indicator
-                            Container(
+                            SizedBox(
                               width: 80,
                               height: 80,
                               child: Stack(
@@ -758,7 +782,7 @@ class _HomePageState extends State<HomePage> {
                                   ),
                                   Text(
                                     "${(progress * 100).toInt()}%",
-                                    style: TextStyle(
+                                    style: const TextStyle(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 16,
                                     ),
@@ -766,7 +790,7 @@ class _HomePageState extends State<HomePage> {
                                 ],
                               ),
                             ),
-                            SizedBox(width: 15),
+                            const SizedBox(width: 15),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -775,14 +799,14 @@ class _HomePageState extends State<HomePage> {
                                     children: [
                                       Icon(Icons.calendar_today,
                                           size: 16, color: Colors.grey[600]),
-                                      SizedBox(width: 4),
+                                      const SizedBox(width: 4),
                                       Text(
                                         'Purchased: $purchaseDate',
-                                        style: TextStyle(fontSize: 14),
+                                        style: const TextStyle(fontSize: 14),
                                       ),
                                     ],
                                   ),
-                                  SizedBox(height: 4),
+                                  const SizedBox(height: 4),
                                   Row(
                                     children: [
                                       Icon(
@@ -792,7 +816,7 @@ class _HomePageState extends State<HomePage> {
                                             ? Colors.red
                                             : Colors.grey[600],
                                       ),
-                                      SizedBox(width: 4),
+                                      const SizedBox(width: 4),
                                       Text(
                                         'Expires: $expiryDate',
                                         style: TextStyle(
@@ -805,15 +829,15 @@ class _HomePageState extends State<HomePage> {
                                       ),
                                     ],
                                   ),
-                                  SizedBox(height: 4),
+                                  const SizedBox(height: 4),
                                   Row(
                                     children: [
                                       Icon(Icons.update,
                                           size: 16, color: Colors.grey[600]),
-                                      SizedBox(width: 4),
+                                      const SizedBox(width: 4),
                                       Text(
                                         'Maintenance: Every $maintenanceDuration months',
-                                        style: TextStyle(fontSize: 14),
+                                        style: const TextStyle(fontSize: 14),
                                       ),
                                     ],
                                   ),
@@ -833,9 +857,11 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    isDarkMode = themeProvider.themeMode == ThemeMode.dark;
     return Scaffold(
       appBar: AppBar(
-        title: Text('HomeScheduler - Appliances'),
+        title: const Text('HomeScheduler - Appliances'),
         actions: [
           IconButton(
             icon: Icon(isCalendarView ? Icons.view_list : Icons.calendar_month),
@@ -845,13 +871,16 @@ class _HomePageState extends State<HomePage> {
                 : 'Switch to Calendar View',
           ),
           IconButton(
-            icon: Icon(isDarkMode ? Icons.light_mode : Icons.dark_mode),
+            icon: Icon(themeProvider.themeMode == ThemeMode.dark
+                ? Icons.light_mode
+                : Icons.dark_mode),
             onPressed: toggleDarkMode,
-            tooltip:
-                isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode',
+            tooltip: themeProvider.themeMode == ThemeMode.dark
+                ? 'Switch to Light Mode'
+                : 'Switch to Dark Mode',
           ),
           IconButton(
-            icon: Icon(Icons.logout),
+            icon: const Icon(Icons.logout),
             onPressed: () async {
               await Provider.of<AuthProvider>(context, listen: false).logout();
               Navigator.pushReplacementNamed(context, '/login');
@@ -873,17 +902,17 @@ class _HomePageState extends State<HomePage> {
                       onChanged: filterAppliances,
                       decoration: InputDecoration(
                         labelText: 'Search Appliance',
-                        prefixIcon: Icon(Icons.search),
+                        prefixIcon: const Icon(Icons.search),
                         border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10)),
                       ),
                     ),
                   ),
-                  SizedBox(width: 10),
+                  const SizedBox(width: 10),
                   Expanded(
                     flex: 3,
                     child: Container(
-                      padding: EdgeInsets.symmetric(horizontal: 10),
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
                       decoration: BoxDecoration(
                         border: Border.all(color: Colors.grey),
                         borderRadius: BorderRadius.circular(10),
@@ -927,7 +956,7 @@ class _HomePageState extends State<HomePage> {
           });
         },
         backgroundColor: Colors.deepPurple,
-        child: Icon(Icons.add, color: Colors.white, size: 30),
+        child: const Icon(Icons.add, color: Colors.white, size: 30),
       ),
     );
   }

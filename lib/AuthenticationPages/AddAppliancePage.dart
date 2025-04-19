@@ -3,8 +3,8 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:io';
 import 'package:intl/intl.dart';
-import 'package:lio/providers/auth_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:lio/providers/auth_provider.dart';
 import 'package:flutter/foundation.dart';
 
 class AddAppliancePage extends StatefulWidget {
@@ -15,23 +15,39 @@ class AddAppliancePage extends StatefulWidget {
 class _AddAppliancePageState extends State<AddAppliancePage> {
   final _formKey = GlobalKey<FormState>();
 
-  // Get the base URL for API calls
   static String get _baseUrl {
-    if (kIsWeb) {
-      return 'http://localhost:3000/api';
-    } else if (Platform.isAndroid) {
-      return 'http://192.168.1.13:3000/api';
-    } else if (Platform.isIOS) {
-      return 'http://192.168.1.13:3000/api';
-    }
-    return 'http://192.168.1.13:3000/api';
+    if (kIsWeb) return 'http://localhost:3000/api';
+    return Platform.isAndroid
+        ? 'http://10.0.2.2:3000/api'
+        : 'http://localhost:3000/api';
   }
+
+  // List of valid appliance types (must match backend)
+  final List<String> applianceTypes = [
+    'refrigerator',
+    'washer',
+    'dryer',
+    'dishwasher',
+    'microwave',
+    'oven',
+    'tv',
+    'ac',
+    'heater',
+    'vacuum',
+    'computer',
+    'printer',
+    'fan',
+    'water_heater',
+    'coffee_maker',
+    'other'
+  ];
 
   TextEditingController nameController = TextEditingController();
   TextEditingController maintenanceDurationController = TextEditingController();
   TextEditingController purchaseDateController = TextEditingController();
   TextEditingController expiryDateController = TextEditingController();
 
+  String selectedType = 'other'; // Default type
   DateTime? purchaseDate;
   DateTime? expiryDate;
 
@@ -52,10 +68,16 @@ class _AddAppliancePageState extends State<AddAppliancePage> {
             colorScheme: ColorScheme.light(
               primary: Theme.of(context).primaryColor,
               onPrimary: Colors.white,
+              surface: Theme.of(context).cardColor,
             ),
+            dialogBackgroundColor: Theme.of(context).scaffoldBackgroundColor,
           ),
           child: child!,
         );
+      },
+      selectableDayPredicate: (DateTime date) {
+        if (isPurchaseDate) return true;
+        return purchaseDate == null ? true : date.isAfter(purchaseDate!);
       },
     );
 
@@ -72,10 +94,82 @@ class _AddAppliancePageState extends State<AddAppliancePage> {
     }
   }
 
+  Widget _buildFormField({
+    required String label,
+    required IconData icon,
+    required TextEditingController controller,
+    bool readOnly = false,
+    VoidCallback? onTap,
+    String? Function(String?)? validator,
+    TextInputType? keyboardType,
+  }) {
+    return TextFormField(
+      controller: controller,
+      readOnly: readOnly,
+      onTap: onTap,
+      validator: validator,
+      keyboardType: keyboardType,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+        filled: true,
+        fillColor:
+            Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.4),
+      ),
+    );
+  }
+
+  Widget _buildDropdownField() {
+    return DropdownButtonFormField<String>(
+      value: selectedType,
+      items: applianceTypes.map((type) {
+        return DropdownMenuItem<String>(
+          value: type,
+          child: Text(
+            type.replaceAll('_', ' ').toUpperCase(),
+            style: TextStyle(fontSize: 14),
+          ),
+        );
+      }).toList(),
+      onChanged: (value) {
+        setState(() {
+          selectedType = value!;
+        });
+      },
+      decoration: InputDecoration(
+        labelText: 'Appliance Type',
+        prefixIcon: Icon(Icons.category),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+        filled: true,
+        fillColor:
+            Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.4),
+      ),
+      validator: (value) => value == null ? 'Select appliance type' : null,
+    );
+  }
+
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: EdgeInsets.only(left: 8, bottom: 8),
+      child: Text(
+        title,
+        style: TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+          color: Theme.of(context).primaryColor,
+        ),
+      ),
+    );
+  }
+
   Future<void> addAppliance() async {
     if (!_formKey.currentState!.validate()) return;
 
-    // Show loading indicator
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -90,6 +184,7 @@ class _AddAppliancePageState extends State<AddAppliancePage> {
       final url = Uri.parse('$_baseUrl/add-appliance');
       final body = jsonEncode({
         "name": nameController.text,
+        "type": selectedType, // Include the selected type
         "purchaseDate": formatDate(purchaseDate),
         "warrantyExpiryDate": formatDate(expiryDate),
         "maintenanceDuration":
@@ -105,7 +200,6 @@ class _AddAppliancePageState extends State<AddAppliancePage> {
         body: body,
       );
 
-      // Close loading dialog
       Navigator.pop(context);
 
       if (response.statusCode == 201) {
@@ -128,7 +222,6 @@ class _AddAppliancePageState extends State<AddAppliancePage> {
         );
       }
     } catch (e) {
-      // Close loading dialog
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -153,81 +246,61 @@ class _AddAppliancePageState extends State<AddAppliancePage> {
             key: _formKey,
             child: ListView(
               children: [
-                // Appliance Info Section
                 _buildSectionHeader('Appliance Information'),
                 Card(
-                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                   child: Padding(
                     padding: EdgeInsets.all(16),
                     child: Column(
                       children: [
-                        TextFormField(
+                        _buildFormField(
+                          label: 'Appliance Name',
+                          icon: Icons.home_repair_service,
                           controller: nameController,
-                          decoration: InputDecoration(
-                            labelText: 'Appliance Name',
-                            border: OutlineInputBorder(),
-                            prefixIcon: Icon(Icons.home_repair_service),
-                          ),
                           validator: (value) =>
                               value!.isEmpty ? 'Enter appliance name' : null,
                         ),
                         SizedBox(height: 16),
-                        TextFormField(
+                        _buildDropdownField(), // Type dropdown
+                        SizedBox(height: 16),
+                        _buildFormField(
+                          label: 'Purchase Date',
+                          icon: Icons.calendar_today,
                           controller: purchaseDateController,
                           readOnly: true,
-                          decoration: InputDecoration(
-                            labelText: 'Purchase Date',
-                            border: OutlineInputBorder(),
-                            prefixIcon: Icon(Icons.calendar_today),
-                            hintText: 'Select purchase date',
-                          ),
                           onTap: () => _selectDate(context, true),
                         ),
                         SizedBox(height: 16),
-                        TextFormField(
+                        _buildFormField(
+                          label: 'Warranty Expiry Date',
+                          icon: Icons.event_available,
                           controller: expiryDateController,
                           readOnly: true,
-                          decoration: InputDecoration(
-                            labelText: 'Warranty Expiry Date',
-                            border: OutlineInputBorder(),
-                            prefixIcon: Icon(Icons.event_available),
-                            hintText: 'Select warranty expiry date',
-                          ),
                           onTap: () => _selectDate(context, false),
                         ),
                       ],
                     ),
                   ),
                 ),
-
                 SizedBox(height: 24),
-
-                // Maintenance Section
                 _buildSectionHeader('Maintenance Details'),
                 Card(
-                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                   child: Padding(
                     padding: EdgeInsets.all(16),
-                    child: TextFormField(
+                    child: _buildFormField(
+                      label: 'Maintenance Interval (months)',
+                      icon: Icons.update,
                       controller: maintenanceDurationController,
-                      decoration: InputDecoration(
-                        labelText: 'Maintenance Interval',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.update),
-                        suffixText: 'months',
-                        helperText:
-                            'How often should this appliance be maintained?',
-                      ),
                       keyboardType: TextInputType.number,
                       validator: (value) =>
                           value!.isEmpty ? 'Enter maintenance duration' : null,
                     ),
                   ),
                 ),
-
                 SizedBox(height: 32),
-
-                // Submit Button
                 Container(
                   width: double.infinity,
                   height: 50,
@@ -241,9 +314,8 @@ class _AddAppliancePageState extends State<AddAppliancePage> {
                       ),
                     ),
                     style: ElevatedButton.styleFrom(
-                      elevation: 3,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(10),
                       ),
                     ),
                   ),
@@ -251,20 +323,6 @@ class _AddAppliancePageState extends State<AddAppliancePage> {
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSectionHeader(String title) {
-    return Padding(
-      padding: EdgeInsets.only(left: 8, bottom: 8),
-      child: Text(
-        title,
-        style: TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-          color: Theme.of(context).primaryColor,
         ),
       ),
     );

@@ -6,18 +6,15 @@ import 'package:flutter/foundation.dart';
 
 class AuthService {
   // Get the appropriate base URL based on platform and environment
-  static String get _baseUrl {
-    if (kIsWeb) {
-      return 'http://localhost:3000/api/auth';
-    } else if (Platform.isAndroid) {
-      // For physical Android devices and emulators
-      return 'http://192.168.1.13:3000/api/auth';
-    } else if (Platform.isIOS) {
-      // For physical iOS devices and simulators
-      return 'http://192.168.1.13:3000/api/auth';
-    }
-    return 'http://192.168.1.13:3000/api/auth';
+ static String get _baseUrl {
+  if (kIsWeb) {
+    return 'http://localhost:3000/api/auth';
+  } else {
+    return Platform.isAndroid
+      ? 'http://10.0.2.2:3000/api/auth'
+      : 'http://localhost:3000/api/auth';
   }
+}
 
   // Add debug method to test connection
   static Future<bool> testConnection() async {

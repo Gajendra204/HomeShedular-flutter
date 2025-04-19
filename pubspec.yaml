@@ -47,6 +47,7 @@ dependencies:
   flutter_svg: 2.0.17
   google_sign_in: ^6.1.0
   shared_preferences: ^2.2.2
+  shimmer: ^2.0.0
 
 dev_dependencies:
   flutter_test:
